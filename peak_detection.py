@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from scipy.signal import find_peaks, convolve
+from scipy.signal import find_peaks, convolve, savgol_filter
 
 class PeakDetection:
     """
@@ -10,48 +10,65 @@ class PeakDetection:
         self.data = data
         self.time_column = time_column
         self.signal_column = signal_column
-
+        self.smooth = self.smooth_signal()
 
     
-    def compute_baseline(self, window_size=100):
+    def compute_baseline(self, target="smooth", window_size=175, peak_prominence=0.2, smoothing_window_length=201, polyorder=3):
         """
         Function to compute the baseline signal
         :param window_size: int
-        :return: pandas.Series
+        :param peak_prominence: float
+        :param smoothing_window_length: int
+        :param polyorder: int
+        :return: list
         """
-        n_lowest = 25
-        smoothing_window_size = np.max([350, 25])
-        y = np.array(self.data[self.signal_column])
+        if target == "smooth":
+            y = np.array(self.smooth)
+        elif target == "raw":
+            y = np.array(self.data[self.signal_column])
+        else:
+            raise ValueError("target must be either 'smooth' or 'raw'")
+        
         end_point = len(y) - window_size
         floor = np.empty([end_point])
 
         for i in range(end_point):
             frame = y[i:i + window_size]
 
-            # Find the valleys (local minima) in the frame by finding peaks in the inverted signal
             valleys, _ = find_peaks(-frame)
 
-            # If there are any valleys, use the lowest valley as the floor for this window
             if len(valleys) > 0:
                 floor[i] = frame[valleys].min()
             else:
-                floor[i] = np.nan  # No floor defined if there are no valleys
+                floor[i] = np.nan  
+                
+        padding = smoothing_window_length // 2
 
-        # add padding to prepare for the convolution
-        padding = smoothing_window_size
-        floor_padded = np.pad(floor, (padding, padding), 'edge')
-        floor_padded = np.nan_to_num(floor_padded)
+        # Pad the resulting signal
+        floor_padded = np.concatenate([floor[:padding], floor, floor[-padding:]]) # remove padding
 
-        # Smooth the floor using a moving average
-        window = np.ones(smoothing_window_size) / smoothing_window_size
-        floor_smooth = convolve(floor_padded, window, mode='valid', method='direct')
+        # Smooth the signal
+        floor_smooth = savgol_filter(floor_padded, window_length=smoothing_window_length, polyorder=polyorder, mode='nearest')
 
         return floor_smooth.tolist()
     
-    def compute_ceiling(self, window_size=100):
-        smoothing_window_size = np.max([350, 25])
+    
+    def compute_ceiling(self, target="smooth", window_size=175, peak_prominence=0.2, smoothing_window_length=201, polyorder=3):
+        """
+        Function to compute the ceiling signal
+        :param window_size: int
+        :param peak_prominence: float
+        :param smoothing_window_length: int
+        :param polyorder: i nt
+        :return: list
+        """
+        if target == "smooth":
+            y = np.array(self.smooth)
+        elif target == "raw":
+            y = np.array(self.data[self.signal_column])
+        else:
+            raise ValueError("target must be either 'smooth' or 'raw'")
 
-        y = np.array(self.data[self.signal_column])
         end_point = len(y) - window_size
         ceiling = np.empty([end_point])
 
@@ -67,13 +84,34 @@ class PeakDetection:
             else:
                 ceiling[i] = np.nan  # No ceiling defined if there are no peaks
 
-        padding = smoothing_window_size
-        ceiling_padded = np.pad(ceiling, (padding, padding), 'edge')
+        padding = smoothing_window_length // 2
+        
+        # Pad the resulting signal
+        ceiling_padded = np.concatenate([ceiling[:padding], ceiling, ceiling[-padding:]])
 
-        ceiling_padded = np.nan_to_num(ceiling_padded)
-
-        # Smooth the ceiling using a moving average
-        window = np.ones(smoothing_window_size)/smoothing_window_size
-        ceiling_smooth = convolve(ceiling_padded, window, mode='valid', method='direct')
+        # Smooth the signal
+        ceiling_smooth = savgol_filter(ceiling_padded, window_length=smoothing_window_length, polyorder=polyorder, mode='nearest')
 
         return ceiling_smooth.tolist()
+    
+
+    def smooth_signal(self, smoothing_window_length=51, polyorder=7):
+        """
+        Function to smooth the raw signal
+        :param window_length: int
+        :param polyorder: int
+        :return: list
+        """
+        y = np.array(self.data[self.signal_column])
+
+        # Pad the signal
+        padding = smoothing_window_length // 2
+        y_padded = np.concatenate([y[:padding], y, y[-padding:]])
+
+        # Smooth the signal using a Savitzky-Golay filter
+        smoothed_signal = savgol_filter(y_padded, window_length=smoothing_window_length, polyorder=polyorder, mode='nearest')
+
+        # Remove the padding
+        smoothed_signal = smoothed_signal[padding:-padding]
+
+        return smoothed_signal.tolist()
