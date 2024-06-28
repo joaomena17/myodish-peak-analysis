@@ -4,6 +4,7 @@ import peakutils
 import plotly.graph_objects as go
 from scipy.signal import find_peaks, convolve, savgol_filter
 
+
 class PeakDetection:
     """
     Class to process an .abf signal, computing baseline and floor signals, and detecting peaks in a signal
@@ -171,7 +172,8 @@ class PeakDetection:
         return peaks
     
 
-    def plot(self, raw_signal=False, smooth_signal=True, peaks=True, baseline=False, ceiling=False, diastolic=False):
+    def plot(self, plot_raw_signal=False, plot_smooth_signal=True, plot_peaks=True, plot_baseline=False, plot_ceiling=False, plot_diastolic=False,
+             peaks=None, baseline=None, ceiling=None, diastolic=None):
         """
         Function to plot the signal with the detected peaks
         :param raw_signal: bool
@@ -181,6 +183,8 @@ class PeakDetection:
         :param ceiling: bool
         :param diastolic: bool     
         """
+        
+        fig = go.Figure(layout=layout)
 
         layout = go.Layout(title=f'Channel',
             xaxis=dict(
@@ -201,9 +205,8 @@ class PeakDetection:
             hovermode='x unified'
         )
 
-        fig = go.Figure(layout=layout)
+        if plot_raw_signal:
 
-        if raw_signal:
             fig.add_trace(go.Scatter
                 (
                     x=self.data[self.time_column],
@@ -213,28 +216,55 @@ class PeakDetection:
                 )
             )
 
-        if ceiling:
-            fig.add_trace(go.Scatter
-                (
-                    x=self.data[self.time_column],
-                    y=self.compute_ceiling(),
-                    mode='lines',
-                    name='Ceiling',
+
+        if plot_ceiling:
+            
+            if ceiling is not None:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=ceiling,
+                        mode='lines',
+                        name='Ceiling',
+                    )
                 )
-            )
 
-
-        if baseline:
-            fig.add_trace(go.Scatter
-                (
-                    x=self.data[self.time_column],
-                    y=self.compute_baseline(),
-                    mode='lines',
-                    name='Baseline',
+            else:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=self.compute_ceiling(),
+                        mode='lines',
+                        name='Ceiling',
+                    )
                 )
-            )
 
-        if smooth_signal:
+
+        if plot_baseline:
+
+            if baseline is not None:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=baseline,
+                        mode='lines',
+                        name='Baseline',
+                    )
+                )
+
+            else:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=self.compute_baseline(),
+                        mode='lines',
+                        name='Baseline',
+                    )
+                )
+
+
+        if plot_smooth_signal:
+
             fig.add_trace(go.Scatter
                 (
                     x=self.data[self.time_column],
@@ -244,28 +274,57 @@ class PeakDetection:
                 )
             )
         
-        if diastolic:
-            fig.add_trace(go.Scatter
-                (
-                    x=self.data[self.time_column],
-                    y=self.diastolic_reference(),
-                    mode='lines',
-                    name='Diastolic Reference',
-                    line=dict(color='tomato', dash='dash')
-                )
-            )
 
-        if peaks:
-            detected_peaks = self.detect_peaks()
-            fig.add_trace(go.Scatter
-                (
-                    x=self.data[self.time_column][detected_peaks],
-                    y=np.array(self.smooth)[detected_peaks],
-                    mode='markers',
-                    name='Detected Peaks',
-                    marker=dict(size=7)
+        if plot_diastolic:
+
+            if diastolic is not None:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=diastolic,
+                        mode='lines',
+                        name='Diastolic Reference',
+                        line=dict(color='tomato', dash='dash')
+                    )
                 )
-            )
+
+            else:    
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column],
+                        y=self.diastolic_reference(),
+                        mode='lines',
+                        name='Diastolic Reference',
+                        line=dict(color='tomato', dash='dash')
+                    )
+                )
+
+
+        if plot_peaks:
+
+            if peaks is not None:
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column][peaks],
+                        y=np.array(self.smooth)[peaks],
+                        mode='markers',
+                        name='Detected Peaks',
+                        marker=dict(size=7)
+                    )
+                )
+
+            else:    
+                detected_peaks = self.detect_peaks()
+                fig.add_trace(go.Scatter
+                    (
+                        x=self.data[self.time_column][detected_peaks],
+                        y=np.array(self.smooth)[detected_peaks],
+                        mode='markers',
+                        name='Detected Peaks',
+                        marker=dict(size=7)
+                    )
+                )
+
 
         fig.update_layout(
             title='Signal',
