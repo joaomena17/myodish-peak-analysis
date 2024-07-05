@@ -10,6 +10,11 @@ class PeakDetection:
     Class to process an .abf signal, computing baseline and floor signals, and detecting peaks in a signal
     """
     def __init__(self, data, time_column='time_index', signal_column='signal_value'):
+        """
+        data: pd.DataFrame
+        time_column: str
+        signal_column: str
+        """
         self.data = data
         self.time_column = time_column
         self.signal_column = signal_column
@@ -23,7 +28,7 @@ class PeakDetection:
         :param peak_prominence: float
         :param smoothing_window_length: int
         :param polyorder: int
-        :return: np.array
+        :return: list
         """
         if target == "smooth":
             y = np.array(self.smooth)
@@ -56,15 +61,7 @@ class PeakDetection:
         floor_smooth = savgol_filter(floor_padded, window_length=smoothing_window_length, polyorder=polyorder, mode='nearest')
 
         return floor_smooth.tolist()
-    
-        """
-        # Alternate version
-
-        baseline = peakutils.baseline(y, 10)
-
-        return baseline.tolist()
-        """
-        
+            
     
     def compute_ceiling(self, target="smooth", window_size=350, peak_prominence=0.2, smoothing_window_length=301, polyorder=3):
         """
@@ -73,7 +70,7 @@ class PeakDetection:
         :param peak_prominence: float
         :param smoothing_window_length: int
         :param polyorder: i nt
-        :return: np.array
+        :return: list
         """
         if target == "smooth":
             y = np.array(self.smooth)
@@ -113,7 +110,7 @@ class PeakDetection:
         Function to smooth the raw signal
         :param window_length: int
         :param polyorder: int
-        :return: np.array
+        :return: list
         """
         y = np.array(self.data[self.signal_column])
 
@@ -135,7 +132,7 @@ class PeakDetection:
         Function to compute the signal 10% higher than the diastolic force, used as a reference for peak detection
         This signal is used to compute time-to-peak (TTP) and time-to-relaxation (TTR)
         :param relative_to_baseline: float
-        :return: np.array
+        :return: list
         """
         if baseline is None:
             baseline = self.compute_baseline()
@@ -158,7 +155,7 @@ class PeakDetection:
         :param min_distance: int
         :param threshold_absolute: bool
         :param wlen: int
-        :return: np.array
+        :return: list, list, list
         """
 
         peaks, _ = find_peaks(self.smooth, width=width, rel_height=rel_height, prominence=prominence, wlen=wlen)
@@ -170,9 +167,9 @@ class PeakDetection:
             if self.smooth[peaks[i]] < ((ceiling[peaks[i]] - baseline[peaks[i]]) * threshold) + baseline[peaks[i]]:
                indices.append(i)
 
-        peaks = np.delete(peaks, indices)
-        peaks_timestamps = self.data[self.time_column][peaks]
-        peaks_vals = np.array(self.smooth)[peaks]
+        peaks = np.delete(peaks, indices).tolist()
+        peaks_timestamps = self.data[self.time_column][peaks].tolist()
+        peaks_vals = np.array(self.smooth)[peaks].tolist()
                 
         return peaks, peaks_timestamps, peaks_vals
     
@@ -181,12 +178,17 @@ class PeakDetection:
              peaks=None, baseline=None, ceiling=None, diastolic=None):
         """
         Function to plot the signal with the detected peaks
-        :param raw_signal: bool
-        :param smooth_signal: bool
-        :param peaks: bool
-        :param baseline: bool
-        :param ceiling: bool
-        :param diastolic: bool     
+        :param plot_all: bool
+        :param plot_raw_signal: bool
+        :param plot_smooth_signal: bool
+        :param plot_peaks: bool
+        :param plot_baseline: bool
+        :param plot_ceiling: bool
+        :param plot_diastolic: bool
+        :param peaks: list
+        :param baseline: list
+        :param ceiling: list
+        :param diastolic: list   
         """
 
         layout = go.Layout(title=f'Channel',
