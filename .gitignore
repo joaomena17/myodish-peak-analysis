@@ -163,4 +163,5 @@ cython_debug/
 
 
 # Specific files and folders
-#peak_tests.ipynb
+unused/
+peak_tests.ipynb
