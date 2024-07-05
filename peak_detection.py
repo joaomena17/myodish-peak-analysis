@@ -10,6 +10,11 @@ class PeakDetection:
     Class to process an .abf signal, computing baseline and floor signals, and detecting peaks in a signal
     """
     def __init__(self, data, time_column='time_index', signal_column='signal_value'):
+        """
+        data: pd.DataFrame
+        time_column: str
+        signal_column: str
+        """
         self.data = data
         self.time_column = time_column
         self.signal_column = signal_column
@@ -23,7 +28,7 @@ class PeakDetection:
         :param peak_prominence: float
         :param smoothing_window_length: int
         :param polyorder: int
-        :return: np.array
+        :return: list
         """
         if target == "smooth":
             y = np.array(self.smooth)
@@ -56,15 +61,7 @@ class PeakDetection:
         floor_smooth = savgol_filter(floor_padded, window_length=smoothing_window_length, polyorder=polyorder, mode='nearest')
 
         return floor_smooth.tolist()
-    
-        """
-        # Alternate version
-
-        baseline = peakutils.baseline(y, 10)
-
-        return baseline.tolist()
-        """
-        
+            
     
     def compute_ceiling(self, target="smooth", window_size=350, peak_prominence=0.2, smoothing_window_length=301, polyorder=3):
         """
@@ -73,7 +70,7 @@ class PeakDetection:
         :param peak_prominence: float
         :param smoothing_window_length: int
         :param polyorder: i nt
-        :return: np.array
+        :return: list
         """
         if target == "smooth":
             y = np.array(self.smooth)
@@ -113,7 +110,7 @@ class PeakDetection:
         Function to smooth the raw signal
         :param window_length: int
         :param polyorder: int
-        :return: np.array
+        :return: list
         """
         y = np.array(self.data[self.signal_column])
 
@@ -130,15 +127,18 @@ class PeakDetection:
         return smoothed_signal.tolist()
     
 
-    def diastolic_reference(self, relative_to_baseline=0.1):
+    def diastolic_reference(self, ceiling=None, baseline=None, relative_to_baseline=0.1):
         """
         Function to compute the signal 10% higher than the diastolic force, used as a reference for peak detection
         This signal is used to compute time-to-peak (TTP) and time-to-relaxation (TTR)
         :param relative_to_baseline: float
-        :return: np.array
+        :return: list
         """
-        baseline = self.compute_baseline()
-        ceiling = self.compute_ceiling()
+        if baseline is None:
+            baseline = self.compute_baseline()
+    
+        if ceiling is None:
+            ceiling = self.compute_ceiling()
 
         diastolic = [baseline[i] + relative_to_baseline * (ceiling[i] - baseline[i]) for i in range(len(baseline))]
 
@@ -155,7 +155,7 @@ class PeakDetection:
         :param min_distance: int
         :param threshold_absolute: bool
         :param wlen: int
-        :return: np.array
+        :return: list, list, list
         """
 
         peaks, _ = find_peaks(self.smooth, width=width, rel_height=rel_height, prominence=prominence, wlen=wlen)
@@ -167,24 +167,29 @@ class PeakDetection:
             if self.smooth[peaks[i]] < ((ceiling[peaks[i]] - baseline[peaks[i]]) * threshold) + baseline[peaks[i]]:
                indices.append(i)
 
-        peaks = np.delete(peaks, indices)
+        peaks = np.delete(peaks, indices).tolist()
+        peaks_timestamps = self.data[self.time_column][peaks].tolist()
+        peaks_vals = np.array(self.smooth)[peaks].tolist()
                 
-        return peaks
+        return peaks, peaks_timestamps, peaks_vals
     
 
-    def plot(self, plot_raw_signal=False, plot_smooth_signal=True, plot_peaks=True, plot_baseline=False, plot_ceiling=False, plot_diastolic=False,
+    def plot(self, plot_all=False, plot_raw_signal=False, plot_smooth_signal=True, plot_peaks=True, plot_baseline=False, plot_ceiling=False, plot_diastolic=False,
              peaks=None, baseline=None, ceiling=None, diastolic=None):
         """
         Function to plot the signal with the detected peaks
-        :param raw_signal: bool
-        :param smooth_signal: bool
-        :param peaks: bool
-        :param baseline: bool
-        :param ceiling: bool
-        :param diastolic: bool     
+        :param plot_all: bool
+        :param plot_raw_signal: bool
+        :param plot_smooth_signal: bool
+        :param plot_peaks: bool
+        :param plot_baseline: bool
+        :param plot_ceiling: bool
+        :param plot_diastolic: bool
+        :param peaks: list
+        :param baseline: list
+        :param ceiling: list
+        :param diastolic: list   
         """
-        
-        fig = go.Figure(layout=layout)
 
         layout = go.Layout(title=f'Channel',
             xaxis=dict(
@@ -205,7 +210,10 @@ class PeakDetection:
             hovermode='x unified'
         )
 
-        if plot_raw_signal:
+        
+        fig = go.Figure(layout=layout)
+
+        if plot_raw_signal or plot_all:
 
             fig.add_trace(go.Scatter
                 (
@@ -217,7 +225,7 @@ class PeakDetection:
             )
 
 
-        if plot_ceiling:
+        if plot_ceiling or plot_all:
             
             if ceiling is not None:
                 fig.add_trace(go.Scatter
@@ -240,7 +248,7 @@ class PeakDetection:
                 )
 
 
-        if plot_baseline:
+        if plot_baseline or plot_all:
 
             if baseline is not None:
                 fig.add_trace(go.Scatter
@@ -263,7 +271,7 @@ class PeakDetection:
                 )
 
 
-        if plot_smooth_signal:
+        if plot_smooth_signal or plot_all:
 
             fig.add_trace(go.Scatter
                 (
@@ -275,7 +283,7 @@ class PeakDetection:
             )
         
 
-        if plot_diastolic:
+        if plot_diastolic or plot_all:
 
             if diastolic is not None:
                 fig.add_trace(go.Scatter
@@ -300,13 +308,14 @@ class PeakDetection:
                 )
 
 
-        if plot_peaks:
+        if plot_peaks or plot_all:
 
             if peaks is not None:
+                _, peak_idx, peak_vals = peaks
                 fig.add_trace(go.Scatter
                     (
-                        x=self.data[self.time_column][peaks],
-                        y=np.array(self.smooth)[peaks],
+                        x=peak_idx,
+                        y=peak_vals,
                         mode='markers',
                         name='Detected Peaks',
                         marker=dict(size=7)
@@ -314,11 +323,11 @@ class PeakDetection:
                 )
 
             else:    
-                detected_peaks = self.detect_peaks()
+                _, peak_idx, peak_vals = self.detect_peaks()
                 fig.add_trace(go.Scatter
                     (
-                        x=self.data[self.time_column][detected_peaks],
-                        y=np.array(self.smooth)[detected_peaks],
+                        x=peak_idx,
+                        y=peak_vals,
                         mode='markers',
                         name='Detected Peaks',
                         marker=dict(size=7)
