@@ -9,19 +9,51 @@ class PeakDetection:
     """
     Class to process an .abf signal, computing baseline and floor signals, and detecting peaks in a signal
     """
-    def __init__(self, data, time_column='time_index', signal_column='signal_value'):
+    def __init__(self, data, stim=None,
+                 time_column='time_index', signal_column='signal_value',
+                 smooth_sig_smoothing_window=51, smooth_sig_polyorder=7, # params for smooth signal
+                 compute_from="smooth", aux_window_size=350, aux_peak_prominence=0.2, aux_smoothing_window=301, aux_polyorder=3, # params for ceiling and baseline functions
+                 relative_to_baseline=0.1, # params for diastolic reference
+                 rel_height=0.3, prominence=0.3, width=1, threshold=0.7, min_distance=20, wlen=250 # params for detect_peaks
+                ):
         """
         data: pd.DataFrame
         time_column: str
         signal_column: str
         """
         self.data = data
+        self.stim = stim
+
+        # normalize values in stim to data values scale
+        if self.stim is not None:
+            self.stim[signal_column] = self.stim[signal_column] * (self.data[signal_column].max() / self.stim[signal_column].max())
+
         self.time_column = time_column
         self.signal_column = signal_column
-        self.smooth = self.smooth_signal()
+        
+        self.compute_from = compute_from
+        self.smooth_sig_smoothing_window = smooth_sig_smoothing_window
+        self.smooth_sig_polyorder = smooth_sig_polyorder
+        
+        self.aux_window_size = aux_window_size
+        self.aux_peak_prominence = aux_peak_prominence
+        self.aux_smoothing_window = aux_smoothing_window
+        self.aux_polyorder = aux_polyorder
+        
+        self.relative_to_baseline = relative_to_baseline
+        
+        self.rel_height = rel_height
+        self.prominence = prominence
+        self.width = width
+        self.threshold = threshold
+        self.min_distance = min_distance
+        self.wlen = wlen
+
+        if self.compute_from == "smooth":
+            self.smooth = self.smooth_signal()
 
     
-    def compute_baseline(self, target="smooth", window_size=350, peak_prominence=0.2, smoothing_window_length=301, polyorder=3):
+    def compute_baseline(self, target=None, window_size=None, peak_prominence=None, smoothing_window_length=None, polyorder=None):
         """
         Function to compute the baseline signal
         :param window_size: int
@@ -30,6 +62,22 @@ class PeakDetection:
         :param polyorder: int
         :return: list
         """
+        if target is None:
+            target = self.compute_from
+
+        if window_size is None:
+            window_size = self.aux_window_size
+        
+        if peak_prominence is None:
+            peak_prominence = self.aux_peak_prominence
+
+        if smoothing_window_length is None:
+            smoothing_window_length = self.aux_smoothing_window
+
+        if polyorder is None:
+            polyorder = self.aux_polyorder
+
+
         if target == "smooth":
             y = np.array(self.smooth)
         elif target == "raw":
@@ -63,7 +111,7 @@ class PeakDetection:
         return floor_smooth.tolist()
             
     
-    def compute_ceiling(self, target="smooth", window_size=350, peak_prominence=0.2, smoothing_window_length=301, polyorder=3):
+    def compute_ceiling(self, target=None, window_size=None, peak_prominence=None, smoothing_window_length=None, polyorder=None):
         """
         Function to compute the ceiling signal
         :param window_size: int
@@ -72,6 +120,22 @@ class PeakDetection:
         :param polyorder: i nt
         :return: list
         """
+        if target is None:
+            target = self.compute_from
+
+        if window_size is None:
+            window_size = self.aux_window_size
+        
+        if peak_prominence is None:
+            peak_prominence = self.aux_peak_prominence
+
+        if smoothing_window_length is None:
+            smoothing_window_length = self.aux_smoothing_window
+
+        if polyorder is None:
+            polyorder = self.aux_polyorder
+
+
         if target == "smooth":
             y = np.array(self.smooth)
         elif target == "raw":
@@ -105,13 +169,19 @@ class PeakDetection:
         return ceiling_smooth.tolist()
     
 
-    def smooth_signal(self, smoothing_window_length=51, polyorder=7):
+    def smooth_signal(self, smoothing_window_length=None, polyorder=None):
         """
         Function to smooth the raw signal
         :param window_length: int
         :param polyorder: int
         :return: list
         """
+        if smoothing_window_length is None:
+            smoothing_window_length = self.smooth_sig_smoothing_window
+
+        if polyorder is None:
+            polyorder = self.smooth_sig_polyorder
+
         y = np.array(self.data[self.signal_column])
 
         # Pad the signal
@@ -127,13 +197,16 @@ class PeakDetection:
         return smoothed_signal.tolist()
     
 
-    def diastolic_reference(self, ceiling=None, baseline=None, relative_to_baseline=0.1):
+    def diastolic_reference(self, ceiling=None, baseline=None, relative_to_baseline=None):
         """
         Function to compute the signal 10% higher than the diastolic force, used as a reference for peak detection
         This signal is used to compute time-to-peak (TTP) and time-to-relaxation (TTR)
         :param relative_to_baseline: float
         :return: list
         """
+        if relative_to_baseline is None:
+            relative_to_baseline = self.relative_to_baseline
+
         if baseline is None:
             baseline = self.compute_baseline()
     
@@ -145,7 +218,7 @@ class PeakDetection:
         return diastolic
     
 
-    def detect_peaks(self, rel_height=0.9, prominence=0.7, width=1, threshold=0.7, min_distance=50, threshold_absolute=False, wlen=250):
+    def detect_peaks(self, rel_height=None, prominence=None, width=None, threshold=None, min_distance=None, wlen=None):
         """
         Function to detect peaks in the signal
         :param rel_height: float
@@ -157,8 +230,25 @@ class PeakDetection:
         :param wlen: int
         :return: list, list, list
         """
+        if rel_height is None:
+            rel_height = self.rel_height
 
-        peaks, _ = find_peaks(self.smooth, width=width, rel_height=rel_height, prominence=prominence, wlen=wlen)
+        if prominence is None:
+            prominence = self.prominence
+
+        if width is None:
+            width = self.width
+
+        if threshold is None:
+            threshold = self.threshold
+
+        if min_distance is None:
+            min_distance = self.min_distance
+
+        if wlen is None:
+            wlen = self.wlen
+
+        peaks, _ = find_peaks(self.smooth, width=width, distance=min_distance, rel_height=rel_height, prominence=prominence, wlen=wlen)
         ceiling = self.compute_ceiling()
         baseline = self.compute_baseline()
 
@@ -174,7 +264,41 @@ class PeakDetection:
         return peaks, peaks_timestamps, peaks_vals
     
 
-    def plot(self, plot_all=False, plot_raw_signal=False, plot_smooth_signal=True, plot_peaks=True, plot_baseline=False, plot_ceiling=False, plot_diastolic=False,
+    def detect_stim_peaks(self, rel_height=None, prominence=None, width=None, threshold=None, min_distance=None, wlen=None):
+        """
+        Function to detect peaks in the stimulus signal
+        :param rel_height: float
+        :param prominence: float
+        :param width: int
+        :param threshold: float
+        :param min_distance: int
+        :param wlen: int
+        :return: list
+        """
+        if rel_height is None:
+            rel_height = self.rel_height
+
+        if prominence is None:
+            prominence = self.prominence
+
+        if width is None:
+            width = self.width
+
+        if threshold is None:
+            threshold = self.threshold
+
+        if min_distance is None:
+            min_distance = self.min_distance
+
+        if wlen is None:
+            wlen = self.wlen
+
+        peaks, _ = find_peaks(self.stim[self.signal_column])
+
+        return peaks
+    
+
+    def plot(self, plot_all=False, plot_raw_signal=False, plot_smooth_signal=True, plot_stim=False, plot_peaks=True, plot_baseline=False, plot_ceiling=False, plot_diastolic=False,
              peaks=None, baseline=None, ceiling=None, diastolic=None):
         """
         Function to plot the signal with the detected peaks
@@ -223,6 +347,24 @@ class PeakDetection:
                     name='Raw Signal',
                 )
             )
+
+
+        if plot_stim or plot_all:
+            
+                if self.stim is not None:
+                    stim_peaks = self.stim[self.time_column][self.detect_stim_peaks()]
+
+                    for peak in stim_peaks:
+                        fig.add_vline(x=peak, line=dict(color="LimeGreen", width=1, dash="dash"))
+
+                    fig.add_annotation(
+                        x=sum(stim_peaks) / len(stim_peaks),
+                        y=max(self.data["signal_value"]) + 20,
+                        text="Stimulus Reference",
+                        showarrow=False,
+                        font=dict(size=14, color="black"),
+                        align="center"
+                    )
 
 
         if plot_ceiling or plot_all:
